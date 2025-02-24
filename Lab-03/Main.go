@@ -29,6 +29,9 @@ func main() {
 	// Slice to store multiple orders
 	var orders []Order
 
+	// Loop for multiple orders
+	for {
+
 	// Display available products
 	fmt.Println("Available Products:")
 	for _, product := range productCatalog {
@@ -114,10 +117,23 @@ func main() {
 
 	fmt.Println("Order ready for dispatch!")
 
-	// Display all orders (demonstrating slice usage)
-	fmt.Println("\nAll Orders:")
-	for i, order := range orders {
-		fmt.Printf("Order %d: %s x%d - $%.2f\n",
-			i+1, order.Product.Name, order.Quantity, float64(order.Quantity)*order.Product.Price)
+		// Ask if user wants to place another order
+		fmt.Print("\nDo you want to place another order? (y/n): ")
+		var response string
+		fmt.Scanf("%s\n", &response)
+		if response != "y" && response != "Y" {
+			break
+		}
 	}
+
+	// Display all orders with total amount
+	fmt.Println("\nAll Orders:")
+	var grandTotal float64
+	for i, order := range orders {
+		orderTotal := float64(order.Quantity) * order.Product.Price
+		grandTotal += orderTotal
+		fmt.Printf("Order %d: %s x%d - $%.2f\n",
+			i+1, order.Product.Name, order.Quantity, orderTotal)
+	}
+	fmt.Printf("\nGrand Total: $%.2f\n", grandTotal)
 }
