@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 )
 
 // Product struct to define the structure of a product
@@ -22,20 +25,39 @@ type Order struct {
 // ProductCatalog represents the store's product inventory
 type ProductCatalog map[int]Product
 
+// ProductData represents the structure of the JSON file
+type ProductData struct {
+	Products []Product `json:"products"`
+}
+
 // initializeProductCatalog creates and returns a new product catalog
-func initializeProductCatalog() ProductCatalog {
-	return ProductCatalog{
-		1: {ID: 1, Name: "Apple", Category: "Grocery", Price: 0.5},
-		2: {ID: 2, Name: "Laptop", Category: "Electronics", Price: 999.99},
-		3: {ID: 3, Name: "T-Shirt", Category: "Fashion", Price: 19.99},
+func initializeProductCatalog() (ProductCatalog, error) {
+	// Read the JSON file
+	data, err := os.ReadFile("products.json")
+	if err != nil {
+		return nil, fmt.Errorf("error reading products file: %v", err)
 	}
+
+	// Parse JSON data
+	var productData ProductData
+	if err := json.Unmarshal(data, &productData); err != nil {
+		return nil, fmt.Errorf("error parsing products data: %v", err)
+	}
+
+	// Convert to catalog format
+	catalog := make(ProductCatalog)
+	for _, product := range productData.Products {
+		catalog[product.ID] = product
+	}
+
+	return catalog, nil
 }
 
 // displayProducts shows all available products in the catalog
 func displayProducts(catalog ProductCatalog) {
 	fmt.Println("Available Products:")
 	for _, product := range catalog {
-		fmt.Printf("ID: %d, Name: %s, Category: %s, Price: $%.2f\n",
+		fmt.Printf("ID: %d, Name: %s, Category: %s, Price: ₹%.2f\n",
 			product.ID, product.Name, product.Category, product.Price)
 	}
 }
@@ -78,9 +100,9 @@ func displayOrderDetails(order Order) {
 	fmt.Printf("ID: %d\n", order.Product.ID)
 	fmt.Printf("Name: %s\n", order.Product.Name)
 	fmt.Printf("Category: %s\n", order.Product.Category)
-	fmt.Printf("Price: $%.2f\n", order.Product.Price)
+	fmt.Printf("Price: ₹%.2f\n", order.Product.Price)
 	fmt.Printf("Quantity: %d\n", order.Quantity)
-	fmt.Printf("Total Price: $%.2f\n", totalPrice)
+	fmt.Printf("Total Price: ₹%.2f\n", totalPrice)
 }
 
 // processOrder handles the order processing and displays appropriate messages
@@ -115,19 +137,23 @@ func processOrder(order Order) {
 
 // displayAllOrders shows all orders in the current session
 func displayAllOrders(orders []Order) {
-	fmt.Println("\nAll Orders:")
-	for i, order := range orders {
-		fmt.Printf("Order %d: %s x%d - $%.2f\n",
-			i+1, order.Product.Name, order.Quantity, calculateTotal(order))
-	}
+    fmt.Println("\nAll Orders:")
+    var grandTotal float64
+    for i, order := range orders {
+        orderTotal := calculateTotal(order)
+        grandTotal += orderTotal
+        fmt.Printf("Order %d: %s x%d - ₹%.2f\n",
+            i+1, order.Product.Name, order.Quantity, orderTotal)
+    }
+    fmt.Printf("\nGrand Total: ₹%.2f\n", grandTotal)
 }
 
 // getValidProductID prompts for and validates a product ID
 func getValidProductID(catalog ProductCatalog) (int, error) {
 	var productID int
 	fmt.Print("\nEnter Product ID: ")
-	_, err := fmt.Scanf("%d\n", &productID)
-	if err != nil {
+	n, err := fmt.Scanf("%d", &productID)
+	if err != nil || n != 1 {
 		return 0, errors.New("invalid input: please enter a valid number")
 	}
 	
@@ -143,8 +169,8 @@ func getValidProductID(catalog ProductCatalog) (int, error) {
 func getValidQuantity() (int, error) {
 	var quantity int
 	fmt.Print("Enter Quantity: ")
-	_, err := fmt.Scanf("%d\n", &quantity)
-	if err != nil {
+	n, err := fmt.Scanf("%d", &quantity)
+	if err != nil || n != 1 {
 		return 0, errors.New("invalid input: please enter a valid number")
 	}
 	
@@ -156,52 +182,71 @@ func getValidQuantity() (int, error) {
 }
 
 func main() {
-	// Initialize product catalog
-	catalog := initializeProductCatalog()
-	
-	// Initialize orders slice
-	var orders []Order
+    // Initialize product catalog
+    catalog, err := initializeProductCatalog()
+    if err != nil {
+        fmt.Println("Error initializing product catalog:", err)
+        return
+    }
+    
+    // Initialize orders slice
+    var orders []Order
 
-	// Display available products
-	displayProducts(catalog)
+    // Main loop for handling orders
+    for {
+        // Display available products
+        displayProducts(catalog)
+    
+        // Get and validate product ID
+        productID, err := getValidProductID(catalog)
+        for err != nil {
+            fmt.Println(err)
+            bufio.NewReader(os.Stdin).ReadString('\n')
+            productID, err = getValidProductID(catalog)
+        }
+    
+        // Get and validate quantity
+        quantity, err := getValidQuantity()
+        for err != nil {
+            fmt.Println(err)
+            bufio.NewReader(os.Stdin).ReadString('\n')
+            quantity, err = getValidQuantity()
+        }
+    
+        // Get product from catalog
+        product, err := getProductByID(catalog, productID)
+        if err != nil {
+            fmt.Println("Error:", err)
+            return
+        }
 
-	// Get and validate product ID
-	productID, err := getValidProductID(catalog)
-	for err != nil {
-		fmt.Println(err)
-		fmt.Scanln() // Clear input buffer
-		productID, err = getValidProductID(catalog)
-	}
+        // Create new order
+        newOrder, err := createOrder(product, quantity)
+        if err != nil {
+            fmt.Println("Error creating order:", err)
+            return
+        }
 
-	// Get and validate quantity
-	quantity, err := getValidQuantity()
-	for err != nil {
-		fmt.Println(err)
-		fmt.Scanln() // Clear input buffer
-		quantity, err = getValidQuantity()
-	}
+        // Add order to orders slice
+        orders = append(orders, newOrder)
 
-	// Get product from catalog
-	product, err := getProductByID(catalog, productID)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
+        // Display and process order
+        displayOrderDetails(newOrder)
+        processOrder(newOrder)
 
-	// Create new order
-	newOrder, err := createOrder(product, quantity)
-	if err != nil {
-		fmt.Println("Error creating order:", err)
-		return
-	}
+        // Display all orders
+        displayAllOrders(orders)
 
-	// Add order to orders slice
-	orders = append(orders, newOrder)
+        // Ask if user wants to continue shopping
+        fmt.Print("\nDo you want to continue shopping? (y/n): ")
+        var response string
+        fmt.Scanf("%s", &response)
+        bufio.NewReader(os.Stdin).ReadString('\n')
 
-	// Display and process order
-	displayOrderDetails(newOrder)
-	processOrder(newOrder)
-
-	// Display all orders
-	displayAllOrders(orders)
+        if response != "y" && response != "Y" {
+            fmt.Println("\nThank you for shopping with us!")
+            displayAllOrders(orders)
+            return
+        }
+    }
 }

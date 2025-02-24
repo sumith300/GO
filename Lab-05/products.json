@@ -1,0 +1,22 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Apple",
+      "category": "Grocery",
+      "price": 40
+    },
+    {
+      "id": 2,
+      "name": "Laptop",
+      "category": "Electronics",
+      "price": 82000
+    },
+    {
+      "id": 3,
+      "name": "T-Shirt",
+      "category": "Fashion",
+      "price": 1500
+    }
+  ]
+}
