@@ -1,10 +1,11 @@
 package main
 
 import (
-    "bufio"
+    // "bufio"
     "encoding/json"
     "errors"
     "fmt"
+    "net/http"
     "os"
 )
 
@@ -34,6 +35,7 @@ type Product struct {
     Name     string
     Category string
     Price    float64
+    Stock    int
 }
 
 // Order struct to store order details
@@ -95,8 +97,8 @@ func (s *Store) GetProduct(id int) (Product, error) {
 func (s *Store) DisplayProducts() {
     fmt.Println("Available Products:")
     for _, product := range s.catalog {
-        fmt.Printf("ID: %d, Name: %s, Category: %s, Price: ₹%.2f\n",
-            product.ID, product.Name, product.Category, product.Price)
+        fmt.Printf("ID: %d, Name: %s, Category: %s, Price: ₹%.2f, Stock: %d\n",
+            product.ID, product.Name, product.Category, product.Price, product.Stock)
     }
 }
 
@@ -112,6 +114,10 @@ func validateQuantity(quantity int) error {
 func (s *Store) CreateOrder(product Product, quantity int) (Order, error) {
     if err := validateQuantity(quantity); err != nil {
         return Order{}, err
+    }
+    // Check if enough stock is available
+    if product.Stock < quantity {
+        return Order{}, fmt.Errorf("insufficient stock: only %d items available", product.Stock)
     }
     return Order{Product: product, Quantity: quantity}, nil
 }
@@ -136,6 +142,11 @@ func (s *Store) DisplayOrderDetails(order Order) {
 
 // ProcessOrder implements OrderProcessor interface
 func (s *Store) ProcessOrder(order Order) {
+    // Update stock quantity
+    if product, exists := s.catalog[order.Product.ID]; exists {
+        product.Stock -= order.Quantity
+        s.catalog[order.Product.ID] = product
+    }
     if order.Quantity > 0 {
         fmt.Println("Product is in stock and ready for quick delivery!")
     } else {
@@ -207,6 +218,49 @@ func getValidQuantity() (int, error) {
     return quantity, nil
 }
 
+// CartItem represents an item in the shopping cart
+type CartItem struct {
+    Product  Product `json:"product"`
+    Quantity int     `json:"quantity"`
+}
+
+// handleGetProducts returns the product catalog as JSON
+func (s *Store) handleGetProducts(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    // Convert map to array
+    products := make([]Product, 0, len(s.catalog))
+    for _, product := range s.catalog {
+        products = append(products, product)
+    }
+    json.NewEncoder(w).Encode(products)
+}
+
+// handleCheckout processes the checkout from the web interface
+func (s *Store) handleCheckout(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    var cartItems []CartItem
+    if err := json.NewDecoder(r.Body).Decode(&cartItems); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Process each cart item
+    for _, item := range cartItems {
+        order, err := s.CreateOrder(item.Product, item.Quantity)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+        }
+        s.ProcessOrder(order)
+    }
+
+    w.WriteHeader(http.StatusOK)
+}
+
 func main() {
     // Create new store instance
     store := NewStore()
@@ -217,58 +271,17 @@ func main() {
         return
     }
 
-    // Initialize orders slice
-    var orders []Order
+    // Set up HTTP routes
+    http.HandleFunc("/api/products", store.handleGetProducts)
+    http.HandleFunc("/api/checkout", store.handleCheckout)
+    http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "static/index.html")
+    })
 
-    // Main loop for handling orders
-    for {
-        // Display available products
-        store.DisplayProducts()
-
-        // Get product ID
-        productID, err := getValidProductID(store)
-        if err != nil {
-            fmt.Println("Error:", err)
-            continue
-        }
-
-        // Get product details
-        product, err := store.GetProduct(productID)
-        if err != nil {
-            fmt.Println("Error:", err)
-            continue
-        }
-
-        // Get quantity
-        quantity, err := getValidQuantity()
-        if err != nil {
-            fmt.Println("Error:", err)
-            continue
-        }
-
-        // Create and process order
-        order, err := store.CreateOrder(product, quantity)
-        if err != nil {
-            fmt.Println("Error creating order:", err)
-            continue
-        }
-
-        // Display order details
-        store.DisplayOrderDetails(order)
-        store.ProcessOrder(order)
-
-        // Add to orders list
-        orders = append(orders, order)
-
-        // Display all orders
-        store.DisplayAllOrders(orders)
-
-        // Ask if user wants to continue
-        fmt.Print("\nDo you want to place another order? (y/n): ")
-        scanner := bufio.NewScanner(os.Stdin)
-        scanner.Scan()
-        if scanner.Text() != "y" {
-            break
-        }
+    // Start the server
+    fmt.Println("Server starting on http://localhost:8080")
+    if err := http.ListenAndServe(":8080", nil); err != nil {
+        fmt.Println("Server error:", err)
     }
 }
