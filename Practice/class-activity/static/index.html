@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Banking System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-university"></i> Modern Banking System</h1>
+        
+        <div id="accountForm" class="form-section">
+            <h2><i class="fas fa-plus-circle"></i> Create New Account</h2>
+            <form id="createAccountForm">
+                <div class="form-group">
+                    <label for="accountType"><i class="fas fa-piggy-bank"></i> Account Type:</label>
+                    <select id="accountType" required>
+                        <option value="1">Savings Account</option>
+                        <option value="2">Current Account</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="initialBalance"><i class="fas fa-rupee-sign"></i> Initial Balance:</label>
+                    <input type="number" id="initialBalance" required min="0" step="0.01" placeholder="Enter initial amount">
+                </div>
+                <div class="form-group">
+                    <label for="accountId"><i class="fas fa-id-card"></i> Account ID:</label>
+                    <input type="text" id="accountId" required placeholder="Enter unique account ID">
+                </div>
+                <button type="submit"><i class="fas fa-check-circle"></i> Create Account</button>
+            </form>
+        </div>
+
+        <div id="accountManagement" class="form-section" style="display: none;">
+            <h2><i class="fas fa-cog"></i> Account Management</h2>
+            <div id="accountInfo">
+                <p><i class="fas fa-wallet"></i> Account Type: <span id="displayAccountType"></span></p>
+                <p><i class="fas fa-money-bill-wave"></i> Balance: ₹<span id="displayBalance"></span></p>
+            </div>
+            <div class="actions">
+                <div class="form-group">
+                    <label for="amount"><i class="fas fa-rupee-sign"></i> Amount:</label>
+                    <input type="number" id="amount" min="0" step="0.01" placeholder="Enter amount">
+                </div>
+                <button onclick="handleDeposit()"><i class="fas fa-arrow-circle-up"></i> Deposit</button>
+                <button onclick="handleWithdraw()"><i class="fas fa-arrow-circle-down"></i> Withdraw</button>
+                <button onclick="viewTransactionHistory()"><i class="fas fa-history"></i> Transaction History</button>
+                <button onclick="backToMain()"><i class="fas fa-arrow-left"></i> Back to Main Menu</button>
+            </div>
+            <div id="transactionHistory" class="transaction-history">
+                <h3><i class="fas fa-list"></i> Transaction History</h3>
+                <ul id="transactionList"></ul>
+            </div>
+        </div>
+
+        <div id="accountList" class="form-section">
+            <h2><i class="fas fa-users"></i> Existing Accounts</h2>
+            <div id="accountListContent"></div>
+        </div>
+    </div>
+    <div class="popup-overlay">
+        <div class="popup-content">
+            <div class="popup-message"></div>
+            <button class="popup-close">OK</button>
+        </div>
+    </div>
+    <link rel="stylesheet" href="popup.css">
+    <script src="script.js"></script>
+</body>
+</html>
