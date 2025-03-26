@@ -1,6 +1,23 @@
 // Global state to store current account
 let currentAccount = null;
 
+// Check authentication on page load
+function checkAuth() {
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
+        window.location.href = 'login.html';
+        return;
+    }
+}
+
+// Add authorization header to fetch requests
+function getAuthHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': localStorage.getItem('sessionToken')
+    };
+}
+
 // Function to show popup message
 function showPopup(message, isError = false) {
     const overlay = document.querySelector('.popup-overlay');
@@ -35,15 +52,18 @@ document.getElementById('createAccountForm').addEventListener('submit', async (e
     try {
         const response = await fetch('http://localhost:8080/api/accounts', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 accountType: parseInt(accountType),
                 initialBalance,
                 accountId
             })
         });
+
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return;
+        }
 
         const data = await response.json();
         if (!response.ok) {
@@ -63,7 +83,15 @@ document.getElementById('createAccountForm').addEventListener('submit', async (e
 // Function to update the list of accounts
 async function updateAccountList() {
     try {
-        const response = await fetch('http://localhost:8080/api/accounts');
+        const response = await fetch('http://localhost:8080/api/accounts', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return;
+        }
+
         const accounts = await response.json();
         const accountListContent = document.getElementById('accountListContent');
         accountListContent.innerHTML = '';
@@ -76,6 +104,9 @@ async function updateAccountList() {
         });
     } catch (error) {
         console.error('Error fetching accounts:', error);
+        if (error.message.includes('Unauthorized')) {
+            window.location.href = 'login.html';
+        }
     }
 }
 
@@ -103,11 +134,14 @@ async function handleDeposit() {
     try {
         const response = await fetch(`http://localhost:8080/api/accounts/${currentAccount.id}/deposit`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ amount })
         });
+
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return;
+        }
 
         const data = await response.json();
         if (!response.ok) {
@@ -140,11 +174,14 @@ async function handleWithdraw() {
     try {
         const response = await fetch(`http://localhost:8080/api/accounts/${currentAccount.id}/withdraw`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ amount })
         });
+
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return;
+        }
 
         const data = await response.json();
         if (!response.ok) {
@@ -166,7 +203,15 @@ async function handleWithdraw() {
 // Function to view transaction history
 async function viewTransactionHistory() {
     try {
-        const response = await fetch(`http://localhost:8080/api/accounts/${currentAccount.id}/history`);
+        const response = await fetch(`http://localhost:8080/api/accounts/${currentAccount.id}/history`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return;
+        }
+
         const transactions = await response.json();
         const transactionList = document.getElementById('transactionList');
         transactionList.innerHTML = '';
@@ -178,6 +223,9 @@ async function viewTransactionHistory() {
         });
     } catch (error) {
         console.error('Error fetching transaction history:', error);
+        if (error.message.includes('Unauthorized')) {
+            window.location.href = 'login.html';
+        }
     }
 }
 
@@ -188,5 +236,6 @@ function backToMain() {
     currentAccount = null;
 }
 
-// Initial load of account list
+// Check authentication and load account list
+checkAuth();
 updateAccountList();

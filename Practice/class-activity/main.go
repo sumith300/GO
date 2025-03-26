@@ -8,6 +8,12 @@ import (
 	"net/http"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
+	"github.com/google/uuid"
+	"os"
+	"context"
 )
 
 // Account interface defines the basic operations for bank accounts
@@ -136,6 +142,34 @@ func (a *BaseAccount) recordTransaction(transType string, amount float64, status
 // GetTransactionHistory returns the transaction history
 func (a *BaseAccount) GetTransactionHistory() []string {
 	return a.transactionHistory
+}
+
+// Database connection
+var db *sql.DB
+
+// User represents a user in the system
+type User struct {
+	ID           int    `json:"id"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"password_hash"`
+}
+
+// Session represents a user session
+type Session struct {
+	Token     string    `json:"token"`
+	UserID    int       `json:"user_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// LoginRequest represents the login form data
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// LoginResponse represents the response after successful login
+type LoginResponse struct {
+	Token string `json:"token"`
 }
 
 // Global map to store accounts
@@ -290,7 +324,119 @@ func getTransactionHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(account.GetTransactionHistory())
 }
 
+// Initialize database connection
+func initDB() error {
+	var err error
+	db, err = sql.Open("sqlite3", "bank.db")
+	if err != nil {
+		return err
+	}
+
+	// Read and execute schema
+	schema, err := os.ReadFile("schema.sql")
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(string(schema))
+	return err
+}
+
+// Authentication middleware
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		if token == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Verify session
+		var userID int
+		err := db.QueryRow("SELECT user_id FROM sessions WHERE session_token = ? AND expires_at > ?",
+			token, time.Now()).Scan(&userID)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Add user ID to request context
+		ctx := context.WithValue(r.Context(), "userID", userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+// Login handler
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get user from database
+	var user User
+	err := db.QueryRow("SELECT id, password_hash FROM users WHERE username = ?",
+		req.Username).Scan(&user.ID, &user.PasswordHash)
+	if err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// Create session
+	token := uuid.New().String()
+	expires := time.Now().Add(24 * time.Hour)
+	_, err = db.Exec("INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)",
+		user.ID, token, expires)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(LoginResponse{Token: token})
+}
+
+// Signup handler
+func signupHandler(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Hash password
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Create user
+	_, err = db.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)",
+		req.Username, string(hash))
+	if err != nil {
+		http.Error(w, "Username already exists", http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
 func main() {
+	// Initialize database
+	if err := initDB(); err != nil {
+		fmt.Printf("Failed to initialize database: %v\n", err)
+		return
+	}
+	defer db.Close()
+
 	// Create a new router
 	r := mux.NewRouter()
 
@@ -298,15 +444,19 @@ func main() {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"http://localhost:8080"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	})
 
-	// API routes
-	r.HandleFunc("/api/accounts", createAccountHandler).Methods("POST")
-	r.HandleFunc("/api/accounts", getAccountsHandler).Methods("GET")
-	r.HandleFunc("/api/accounts/{id}/deposit", depositHandler).Methods("POST")
-	r.HandleFunc("/api/accounts/{id}/withdraw", withdrawHandler).Methods("POST")
-	r.HandleFunc("/api/accounts/{id}/history", getTransactionHistoryHandler).Methods("GET")
+	// Auth routes
+	r.HandleFunc("/api/auth/login", loginHandler).Methods("POST")
+	r.HandleFunc("/api/auth/signup", signupHandler).Methods("POST")
+
+	// Protected API routes
+	r.HandleFunc("/api/accounts", authMiddleware(createAccountHandler)).Methods("POST")
+	r.HandleFunc("/api/accounts", authMiddleware(getAccountsHandler)).Methods("GET")
+	r.HandleFunc("/api/accounts/{id}/deposit", authMiddleware(depositHandler)).Methods("POST")
+	r.HandleFunc("/api/accounts/{id}/withdraw", authMiddleware(withdrawHandler)).Methods("POST")
+	r.HandleFunc("/api/accounts/{id}/history", authMiddleware(getTransactionHistoryHandler)).Methods("GET")
 
 	// Serve static files
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("static")))
@@ -315,3 +465,8 @@ func main() {
 	fmt.Println("Server is running on http://localhost:8080")
 	http.ListenAndServe(":8080", c.Handler(r))
 }
+
+
+
+write about
+literature review about other projects 

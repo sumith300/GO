@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -81,245 +85,196 @@ func validateDateTime(dateStr, timeStr string) (time.Time, time.Time, error) {
 	return date, tm, nil
 }
 
+func (es *eventStore) longestEvent() *Event {
+    if len(es.eventsList) == 0 {
+        return nil
+    }
+    longest := es.eventsList[0]
+    for _, event := range es.eventsList {
+        if event.Duration > longest.Duration {
+            longest = event
+        }
+    }
+    return longest
+}
+
+func (es *eventStore) countEventsByDate(date time.Time) int {
+    count := 0
+    for _, event := range es.eventsList {
+        if event.Date.Equal(date) {
+            count++
+        }
+    }
+    return count
+}
+
+func (es *eventStore) averageDuration() float64 {
+    if len(es.eventsList) == 0 {
+        return 0
+    }
+    total := 0
+    for _, event := range es.eventsList {
+        total += event.Duration
+    }
+    return float64(total) / float64(len(es.eventsList))
+}
+
 func main() {
-	es := &eventStore{
-		eventsMap: make(map[string]*Event),
-	}
+    es := &eventStore{
+        eventsMap: make(map[string]*Event),
+    }
 
-	// Sample menu loop
-	for {
-		fmt.Println("\nChronoSync Event Manager")
-		fmt.Println("1. Add New Event")
-		fmt.Println("2. Modify Event")
-		fmt.Println("3. Delete Event")
-		fmt.Println("4. List All Upcoming Events")
-		fmt.Println("5. View Daily Events")
-		fmt.Println("6. Display Analytics")
-		fmt.Println("7. Exit")
+    // Sample menu loop
+    for {
+        fmt.Println("\nChronoSync Event Manager")
+        fmt.Println("1. Add New Event")
+        fmt.Println("2. Modify Event")
+        fmt.Println("3. Delete Event")
+        fmt.Println("4. List All Upcoming Events")
+        fmt.Println("5. View Daily Events")
+        fmt.Println("6. Display Analytics")
+        fmt.Println("7. Exit")
 
-		var choice int
-		fmt.Print("Enter choice: ")
-		choiceStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		choice, err := strconv.Atoi(strings.TrimSpace(choiceStr))
-		if err != nil {
-		    fmt.Println("Invalid input: Please enter a number between 1-7")
-		    continue
-		}
+        var choice int
+        fmt.Print("Enter choice: ")
+        choiceStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+        choice, err := strconv.Atoi(strings.TrimSpace(choiceStr))
+        if err != nil {
+            fmt.Println("Invalid input: Please enter a number between 1-7")
+            continue
+        }
 
-		switch choice {
-		case 1:
-			var name, dateStr, timeStr string
-			var duration int
+        switch choice {
+        case 1:
+            var name, dateStr, timeStr string
+            var duration int
 
-			fmt.Print("Enter event name: ")
-			name, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			name = strings.TrimSpace(name)
+            fmt.Print("Enter event name: ")
+            name, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+            name = strings.TrimSpace(name)
 
-			fmt.Print("Enter date (YYYY-MM-DD): ")
-			fmt.Scanln(&dateStr)
+            fmt.Print("Enter date (YYYY-MM-DD): ")
+            fmt.Scanln(&dateStr)
 
-			fmt.Print("Enter start time (HH:MM): ")
-			fmt.Scanln(&timeStr)
+            fmt.Print("Enter start time (HH:MM): ")
+            fmt.Scanln(&timeStr)
 
-			fmt.Print("Enter duration in hours: ")
-			durStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			duration, err := strconv.Atoi(strings.TrimSpace(durStr))
-			if err != nil || duration <= 0 {
-			    fmt.Println("Invalid duration: must be positive integer")
-			    continue
-			}
+            fmt.Print("Enter duration in hours: ")
+            durStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+            duration, err = strconv.Atoi(strings.TrimSpace(durStr))
+            if err != nil || duration <= 0 {
+                fmt.Println("Invalid duration: must be positive integer")
+                continue
+            }
 
-			date, startTime, err := validateDateTime(dateStr, timeStr)
-			if err != nil {
-				fmt.Println("Validation error:", err)
-				continue
-			}
+            date, startTime, err := validateDateTime(dateStr, timeStr)
+            if err != nil {
+                fmt.Println("Validation error:", err)
+                continue
+            }
 
-			event := &Event{
-				Name:      name,
-				Date:      date,
-				StartTime: startTime,
-				Duration:  duration,
-			}
+            event := &Event{
+                Name:      name,
+                Date:      date,
+                StartTime: startTime,
+                Duration:  duration,
+            }
 
-			if err := es.addEvent(event); err != nil {
-				fmt.Println("Error adding event:", err)
-			} else {
-				fmt.Println("Event added successfully!")
-			}
-		case 2:
-			var name, newDateStr, newTimeStr string
-			var newDuration int
+            if err := es.addEvent(event); err != nil {
+                fmt.Println("Error adding event:", err)
+            } else {
+                fmt.Println("Event added successfully!")
+            }
+        case 2:
+            fmt.Print("Enter event name to modify: ")
+            modName, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+            modName = strings.TrimSpace(modName)
 
-			fmt.Print("Enter event name to modify: ")
-			modName, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			modName = strings.TrimSpace(modName)
+            event, exists := es.eventsMap[modName] 
+            if !exists {
+                fmt.Printf("Error: Event '%s' not found\n", modName)
+                continue
+            }
 
-			event, exists := es.eventsMap[modName] 
-			if !exists {
-			    fmt.Printf("Error: Event '%s' not found\n", modName)
-			    continue
-			}
+            fmt.Print("Enter new date (YYYY-MM-DD): ")
+            var newDateStr string
+            fmt.Scanln(&newDateStr)
 
-			fmt.Print("Enter new date (YYYY-MM-DD): ")
-			newDateStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			newDateStr = strings.TrimSpace(newDateStr)
+            fmt.Print("Enter new start time (HH:MM): ")
+            var newTimeStr string
+            fmt.Scanln(&newTimeStr)
 
-			fmt.Print("Enter new time (HH:MM): ")
-			newTimeStr, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			newTimeStr = strings.TrimSpace(newTimeStr)
+            fmt.Print("Enter new duration in hours: ")
+            var newDuration int
+            fmt.Scanln(&newDuration)
 
-			fmt.Printf("Current date (%s) - enter new date (YYYY-MM-DD): ", event.Date.Format("2006-01-02"))
-			fmt.Scanln(&newDateStr)
+            if newDuration <= 0 {
+                fmt.Println("Invalid duration: must be positive integer")
+                continue
+            }
 
-			fmt.Printf("Current time (%s) - enter new time (HH:MM): ", event.StartTime.Format("15:04"))
-			fmt.Scanln(&newTimeStr)
+            date, startTime, err := validateDateTime(newDateStr, newTimeStr)
+            if err != nil {
+                fmt.Println("Validation error:", err)
+                continue
+            }
 
-			fmt.Printf("Current duration (%dh) - enter new duration: ", event.Duration)
-			_, err := fmt.Scanln(&newDuration)
-			if err != nil || newDuration <= 0 {
-				fmt.Println("Invalid duration: must be positive integer")
-				continue
-			}
+            // Create temporary event to check for conflicts
+            tempEvent := &Event{
+                Name:      event.Name,
+                Date:      date,
+                StartTime: startTime,
+                Duration:  newDuration,
+            }
 
-			newDate, newTime, err := validateDateTime(newDateStr, newTimeStr)
-			if err != nil {
-				fmt.Println("Validation error:", err)
-				continue
-			}
+            if es.hasTimeConflict(tempEvent) {
+                fmt.Println("Error: Time slot conflicts with existing event")
+                continue
+            }
 
-			// Update event details
-			event.Date = newDate
-			event.StartTime = newTime
-			event.Duration = newDuration
+            // Update the event
+            event.Date = date
+            event.StartTime = startTime
+            event.Duration = newDuration
 
-			// Re-sort events list
-			sort.Slice(es.eventsList, func(i, j int) bool {
-				if es.eventsList[i].Date.Equal(es.eventsList[j].Date) {
-					return es.eventsList[i].StartTime.Before(es.eventsList[j].StartTime)
-				}
-				return es.eventsList[i].Date.Before(es.eventsList[j].Date)
-			})
+            fmt.Println("Event updated successfully!")
 
-			fmt.Println("Event modified successfully!")
-		case 3:
-			var name string
-			fmt.Print("Enter event name to delete: ")
-			delName, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-			delName = strings.TrimSpace(delName)
+        case 6:
+            if len(es.eventsList) == 0 {
+                fmt.Println("No events to analyze")
+                continue
+            }
 
-			if _, exists := es.eventsMap[delName]; !exists {
-				fmt.Printf("Error: Event '%s' not found\n", delName)
-				continue
-			}
+            fmt.Println("\nEvent Analytics:")
+            
+            // Longest event
+            if longest := es.longestEvent(); longest != nil {
+                fmt.Printf("Longest Event: %s (%d hours)\n", longest.Name, longest.Duration)
+            } else {
+                fmt.Println("No events to analyze")
+            }
+            
+            // Event count by date
+            var dateStr string
+            fmt.Print("Enter date to count events (YYYY-MM-DD): ")
+            fmt.Scanln(&dateStr)
+            date, err := time.Parse("2006-01-02", dateStr)
+            if err != nil {
+                fmt.Println("Invalid date format")
+                break
+            }
+            count := es.countEventsByDate(date)
+            fmt.Printf("Events on %s: %d\n", dateStr, count)
+            
+            // Average duration
+            avg := es.averageDuration()
+            fmt.Printf("Average Event Duration: %.2f hours\n", avg)
 
-			// Remove from map
-			delete(es.eventsMap, name)
-
-			// Remove from slice
-			for i, event := range es.eventsList {
-				if event.Name == name {
-					es.eventsList = append(es.eventsList[:i], es.eventsList[i+1:]...)
-					break
-				}
-			}
-
-			fmt.Println("Event deleted successfully!")
-		case 6:
-			return
-		case 4:
-			var dateStr string
-			fmt.Print("Enter date to view events (YYYY-MM-DD): ")
-			fmt.Scanln(&dateStr)
-
-			if !dateRegex.MatchString(dateStr) {
-				fmt.Println("Invalid date format")
-				continue
-			}
-
-			date, err := time.Parse("2006-01-02", dateStr)
-			if err != nil {
-				fmt.Println("Invalid date:", err)
-				continue
-			}
-
-			fmt.Printf("\nEvents on %s:\n", dateStr)
-			for _, event := range es.eventsList {
-				if event.Date.Equal(date) {
-					fmt.Printf("- %s: %s (%d hours)\n", 
-						event.Name, 
-						event.StartTime.Format("15:04"),
-						event.Duration)
-				}
-			}
-
-		case 5:
-			if len(es.eventsList) == 0 {
-				fmt.Println("No events to analyze")
-				continue
-			}
-
-			func (es *eventStore) longestEvent() *Event {
-			    if len(es.eventsList) == 0 {
-			        return nil
-			    }
-			    longest := es.eventsList[0]
-			    for _, event := range es.eventsList {
-			        if event.Duration > longest.Duration {
-			            longest = event
-			        }
-			    }
-			    return longest
-			}
-			
-			func (es *eventStore) countEventsByDate(date time.Time) int {
-			    count := 0
-			    for _, event := range es.eventsList {
-			        if event.Date.Equal(date) {
-			            count++
-			        }
-			    }
-			    return count
-			}
-			
-			func (es *eventStore) averageDuration() float64 {
-			    if len(es.eventsList) == 0 {
-			        return 0
-			    }
-			    total := 0
-			    for _, event := range es.eventsList {
-			        total += event.Duration
-			    }
-			    return float64(total) / float64(len(es.eventsList))
-			}
-
-			fmt.Println("\nEvent Analytics:")
-			
-			// Longest event
-			if longest := es.longestEvent(); longest != nil {
-			    fmt.Printf("Longest Event: %s (%d hours)\n", longest.Name, longest.Duration)
-			} else {
-			    fmt.Println("No events to analyze")
-			}
-			
-			// Event count by date
-			var dateStr string
-			fmt.Print("Enter date to count events (YYYY-MM-DD): ")
-			fmt.Scanln(&dateStr)
-			date, err := time.Parse("2006-01-02", dateStr)
-			if err != nil {
-			    fmt.Println("Invalid date format")
-			    break
-			}
-			count := es.countEventsByDate(date)
-			fmt.Printf("Events on %s: %d\n", dateStr, count)
-			
-			// Average duration
-			avg := es.averageDuration()
-			fmt.Printf("Average Event Duration: %.2f hours\n", avg)
-
-		default:
-			fmt.Println("Invalid choice")
-		}
-	}
+        case 7:
+            fmt.Println("Goodbye!")
+            return
+        default:
+            fmt.Println("Invalid choice")
+        }
+    }
 }

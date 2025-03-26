@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Modern Banking System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-university"></i> Modern Banking System</h1>
+        
+        <div class="form-section" id="loginForm">
+            <h2><i class="fas fa-sign-in-alt"></i> Login</h2>
+            <form id="userLoginForm">
+                <div class="form-group">
+                    <label for="username"><i class="fas fa-user"></i> Username:</label>
+                    <input type="text" id="username" required placeholder="Enter your username">
+                </div>
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> Password:</label>
+                    <input type="password" id="password" required placeholder="Enter your password">
+                </div>
+                <button type="submit"><i class="fas fa-sign-in-alt"></i> Login</button>
+            </form>
+            <p class="form-footer">
+                Don't have an account? <a href="#" id="showSignup">Sign up</a>
+            </p>
+        </div>
+
+        <div class="form-section" id="signupForm" style="display: none;">
+            <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+            <form id="userSignupForm">
+                <div class="form-group">
+                    <label for="newUsername"><i class="fas fa-user"></i> Username:</label>
+                    <input type="text" id="newUsername" required placeholder="Choose a username">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword"><i class="fas fa-lock"></i> Password:</label>
+                    <input type="password" id="newPassword" required placeholder="Choose a password">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword"><i class="fas fa-lock"></i> Confirm Password:</label>
+                    <input type="password" id="confirmPassword" required placeholder="Confirm your password">
+                </div>
+                <button type="submit"><i class="fas fa-user-plus"></i> Sign Up</button>
+            </form>
+            <p class="form-footer">
+                Already have an account? <a href="#" id="showLogin">Login</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="popup-overlay">
+        <div class="popup-content">
+            <div class="popup-message"></div>
+            <button class="popup-close">OK</button>
+        </div>
+    </div>
+    <link rel="stylesheet" href="popup.css">
+    <script src="auth.js"></script>
+</body>
+</html>
