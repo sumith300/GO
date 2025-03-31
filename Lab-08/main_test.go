@@ -130,9 +130,6 @@ func TestProductsJSONLoading(t *testing.T) {
 }
 
 func TestCalculateTotalTableDriven(t *testing.T) {
-	store := NewStore()
-	store.InitializeCatalog()
-
 	tests := []struct {
 		name     string
 		quantity int
@@ -143,11 +140,23 @@ func TestCalculateTotalTableDriven(t *testing.T) {
 		{"zero quantity", 0, 0.00},
 	}
 
-	product, _ := store.GetProduct(1)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			order, _ := store.CreateOrder(product, tt.quantity)
+			// Create a new store instance for each test case
+			store := NewStore()
+			if err := store.InitializeCatalog(); err != nil {
+				t.Fatalf("Failed to initialize catalog: %v", err)
+			}
+
+			product, err := store.GetProduct(1)
+			if err != nil {
+				t.Fatalf("Failed to get product: %v", err)
+			}
+			
+			order, err := store.CreateOrder(product, tt.quantity)
+			if err != nil {
+				t.Fatalf("Failed to create order: %v", err)
+			}
 			total := store.CalculateTotal(order)
 			if total != tt.expected {
 				t.Errorf("Expected %.2f, got %.2f", tt.expected, total)

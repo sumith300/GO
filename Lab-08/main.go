@@ -7,6 +7,7 @@ import (
     "fmt"
     "net/http"
     "os"
+    "strconv"
     "strings"
 )
 
@@ -33,11 +34,11 @@ type DisplayManager interface {
 
 // Product struct to define the structure of a product
 type Product struct {
-    ID       int
-    Name     string
-    Category string
-    Price    float64
-    Stock    int
+    ID       int     `json:"id"`
+    Name     string  `json:"name"`
+    Category string  `json:"category"`
+    Price    float64 `json:"price"`
+    Stock    int     `json:"stock"`
 }
 
 // Order struct to store order details
@@ -99,16 +100,13 @@ func (s *Store) GetProduct(id int) (*Product, error) {
 
 // UpdateStock implements ProductManager interface (Call by Reference)
 func (s *Store) UpdateStock(id int, quantity int) error {
-    product, exists := s.catalog[id]
-    if !exists {
+    if _, exists := s.catalog[id]; !exists {
         return errors.New("product not found")
     }
-    if quantity <= 0 {
-        return errors.New("quantity must be positive")
+    if quantity < 0 {
+        return errors.New("quantity cannot be negative")
     }
-    if product.Stock < quantity {
-        return errors.New("insufficient stock")
-    }
+    // Set the stock to the specified quantity
     s.catalog[id].Stock = quantity
     return nil
 }
@@ -144,13 +142,15 @@ func (s *Store) CreateOrder(product *Product, quantity int) (*Order, error) {
         }
         return &Order{Product: product, Quantity: quantity}, nil
     }
+    // Check stock before creating order
     if product.Stock < quantity {
         return nil, fmt.Errorf("insufficient stock: only %d items available", product.Stock)
     }
-    if err := s.UpdateStock(product.ID, quantity); err != nil {
-        return nil, err
-    }
-    return &Order{Product: product, Quantity: quantity}, nil
+    // Create the order first
+    order := &Order{Product: product, Quantity: quantity}
+    // Then update the stock by subtracting the ordered quantity
+    s.catalog[product.ID].Stock -= quantity
+    return order, nil
 }
 
 // CalculateTotal implements OrderProcessor interface (Call by Reference)
@@ -173,12 +173,6 @@ func (s *Store) DisplayOrderDetails(order *Order) {
 
 // ProcessOrder implements OrderProcessor interface (Call by Reference)
 func (s *Store) ProcessOrder(order *Order) {
-    // Update stock quantity using UpdateStock
-    if err := s.UpdateStock(order.Product.ID, order.Quantity); err != nil {
-        fmt.Printf("Error updating stock: %v\n", err)
-        return
-    }
-
     if order.Quantity > 0 {
         fmt.Println("Product is in stock and ready for quick delivery!")
     } else {
@@ -283,20 +277,46 @@ type CartItem struct {
 // handleGetProducts returns the product catalog as JSON
 func (s *Store) handleGetProducts(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+    
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+    
     // Convert map to array
     products := make([]Product, 0, len(s.catalog))
     for _, product := range s.catalog {
-        products = append(products, *product) // Dereference pointer
+        // Create a copy of the product to avoid pointer issues
+        productCopy := *product
+        products = append(products, productCopy)
     }
-    json.NewEncoder(w).Encode(products)
+    
+    if err := json.NewEncoder(w).Encode(products); err != nil {
+        http.Error(w, "Error encoding products", http.StatusInternalServerError)
+        return
+    }
 }
 
 // handleCheckout processes the checkout from the web interface
 func (s *Store) handleCheckout(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+    
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
     if r.Method != http.MethodPost {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
     }
+
+    w.Header().Set("Content-Type", "application/json")
 
     var cartItems []CartItem
     if err := json.NewDecoder(r.Body).Decode(&cartItems); err != nil {
@@ -306,7 +326,15 @@ func (s *Store) handleCheckout(w http.ResponseWriter, r *http.Request) {
 
     // Process each cart item
     for _, item := range cartItems {
-        order, err := s.CreateOrder(item.Product, item.Quantity)
+        // Get the product from the catalog
+        product, err := s.GetProduct(item.Product.ID)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Product not found: %v", err), http.StatusBadRequest)
+            return
+        }
+
+        // Create and process the order
+        order, err := s.CreateOrder(product, item.Quantity)
         if err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
             return
@@ -315,6 +343,7 @@ func (s *Store) handleCheckout(w http.ResponseWriter, r *http.Request) {
     }
 
     w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Order processed successfully"})
 }
 
 func main() {
@@ -329,6 +358,9 @@ func main() {
 
     // Set up HTTP routes
     http.HandleFunc("/api/products", store.handleGetProducts)
+    http.HandleFunc("/api/products/", store.handleGetProduct)
+    http.HandleFunc("/api/products/stock", store.handleUpdateStock)
+    http.HandleFunc("/api/orders", store.handleCreateOrder)
     http.HandleFunc("/api/checkout", store.handleCheckout)
     http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -340,4 +372,122 @@ func main() {
     if err := http.ListenAndServe(":8080", nil); err != nil {
         fmt.Println("Server error:", err)
     }
+}
+
+// handleGetProduct returns a specific product as JSON
+func (s *Store) handleGetProduct(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
+    if r.Method != http.MethodGet {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    // Extract product ID from URL
+    parts := strings.Split(r.URL.Path, "/")
+    if len(parts) != 4 {
+        http.Error(w, "Invalid URL", http.StatusBadRequest)
+        return
+    }
+
+    productID, err := strconv.Atoi(parts[3])
+    if err != nil {
+        http.Error(w, "Invalid product ID", http.StatusBadRequest)
+        return
+    }
+
+    product, err := s.GetProduct(productID)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusNotFound)
+        return
+    }
+
+    json.NewEncoder(w).Encode(product)
+}
+
+// handleUpdateStock updates the stock of a product
+func (s *Store) handleUpdateStock(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPut {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    // Extract product ID from URL
+    parts := strings.Split(r.URL.Path, "/")
+    if len(parts) != 4 {
+        http.Error(w, "Invalid URL format", http.StatusBadRequest)
+        return
+    }
+
+    productID, err := strconv.Atoi(parts[3])
+    if err != nil {
+        http.Error(w, "Invalid product ID", http.StatusBadRequest)
+        return
+    }
+
+    // Parse request body
+    var request struct {
+        Stock int `json:"stock"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Update stock
+    if err := s.UpdateStock(productID, request.Stock); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    // Return success response
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Stock updated successfully"})
+}
+
+// handleCreateOrder creates a new order
+func (s *Store) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    
+    if r.Method == "OPTIONS" {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    var request struct {
+        ProductID int `json:"productId"`
+        Quantity  int `json:"quantity"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    product, err := s.GetProduct(request.ProductID)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusNotFound)
+        return
+    }
+
+    order, err := s.CreateOrder(product, request.Quantity)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(order)
 }
