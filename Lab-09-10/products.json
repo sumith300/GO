@@ -1,0 +1,28 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Apple",
+      "category": "Grocery",
+      "price": 40,
+      "stock": 100,
+      "image": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='#e74c3c' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/></svg>"
+    },
+    {
+      "id": 2,
+      "name": "Laptop",
+      "category": "Electronics",
+      "price": 82000,
+      "stock": 10,
+      "image": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='#3498db' d='M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z'/></svg>"
+    },
+    {
+      "id": 3,
+      "name": "T-Shirt",
+      "category": "Fashion",
+      "price": 1500,
+      "stock": 50,
+      "image": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='#2ecc71' d='M16 2l4 4v12c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6l4-4h8zm-1 7V3H9v6H6l6 6 6-6h-3z'/></svg>"
+    }
+  ]
+}
