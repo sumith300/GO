@@ -98,29 +98,29 @@ function displayProducts() {
 
 // Add product to cart
 async function addToCart(productId) {
-    const product = products.find(p => p.id === productId);
-    const quantityInput = document.getElementById(`quantity-${productId}`);
-    const quantity = parseInt(quantityInput.value);
+    try {
+        const product = products.find(p => p.id === productId);
+        const quantityInput = document.getElementById(`quantity-${productId}`);
+        const quantity = parseInt(quantityInput.value);
 
-    if (!product || quantity <= 0) {
-        alert('Invalid product or quantity!');
-        return;
-    }
+        if (!product || quantity <= 0) {
+            alert('Invalid product or quantity!');
+            return;
+        }
 
-    if (quantity > product.stock) {
-        alert('Not enough stock available!');
-        return;
-    }
-
-    const existingItem = cart.find(item => item.product.id === productId);
-    if (existingItem) {
-        if (existingItem.quantity + quantity > product.stock) {
+        if (quantity > product.stock) {
             alert('Not enough stock available!');
             return;
         }
-    }
 
-    try {
+        const existingItem = cart.find(item => item.product.id === productId);
+        const totalQuantity = existingItem ? existingItem.quantity + quantity : quantity;
+
+        if (totalQuantity > product.stock) {
+            alert('Not enough stock available!');
+            return;
+        }
+
         // Verify stock availability from server
         const response = await fetch('/check-stock', {
             method: 'POST',
@@ -129,7 +129,7 @@ async function addToCart(productId) {
             },
             body: JSON.stringify({
                 productId: productId,
-                quantity: quantity
+                quantity: totalQuantity
             })
         });
 
@@ -141,7 +141,7 @@ async function addToCart(productId) {
 
         // Update cart
         if (existingItem) {
-            existingItem.quantity += quantity;
+            existingItem.quantity = totalQuantity;
         } else {
             cart.push({
                 product: product,
@@ -152,13 +152,16 @@ async function addToCart(productId) {
         // Update product stock locally
         product.stock -= quantity;
         
-        // Reset quantity input
+        // Reset quantity input and update max value
         quantityInput.value = 1;
         quantityInput.max = product.stock;
         
-        // Update display
+        // Update displays
         displayProducts();
         updateCartDisplay();
+
+        // Show success message
+        alert('Product added to cart successfully!');
     } catch (error) {
         console.error('Error adding to cart:', error);
         alert('Failed to add item to cart. Please try again.');
